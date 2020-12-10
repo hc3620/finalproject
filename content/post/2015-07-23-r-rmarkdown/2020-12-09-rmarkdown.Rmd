@@ -1,0 +1,140 @@
+---
+title: "How did COVID-19 affect the crime rates in Chicago in 2020 compared to 2019"
+author: "HaEun Choi"
+date: 2015-12-09T21:13:14-05:00
+categories: ["R"]
+tags: ["R Markdown", "plot", "regression"]
+---
+#Abstract
+The purpose of this paper is to identify the differences in crime rates in Chicago between March 2019 and March 2020 using the dataset in Chicago Data Portal. 
+It was found that the crime rates have significantly decreased after the COVID pandemic hit North America, 
+compared to the previous year. 
+
+# Introduction
+
+I examined the 2019 and 2020 crimes datasets provided by Chicago Police Department which includes the reported crime 
+in Chicago. The data is available since 2001 and is constantly being updated. I primarily focused on the crime type
+and the number of reported crimes in order to investigate the difference in numbers and categories of crimes. 
+
+In order to properly categorize the types of crimes, I had to clean some types of crimes from the dataset. 
+I also cleaned the categories that has low frequency of crime rate and grouped it into “other offense.” 
+
+The main findings from this study is that some types of crime rate in 2020 has significantly decreased
+compared to the crime rate in 2019. In both years, the two most frequent crime types in 2019 are theft and battery. 
+
+
+# remove scientific notation in R output
+options(scipen=999)
+# clear environment
+remove(list = ls())
+
+# install packages
+# install.packages('prettyR')
+# install.packages('ggmap')
+library('data.table')
+library('prettyR')
+library('scales')
+library('plyr')
+library('chron') 
+library('ggmap')
+library('dplyr')
+
+
+# set folder location
+setwd("C:/ST/julia C/Chicago crime")
+
+# Data source
+# https://data.cityofchicago.org/Public-Safety/Crimes-2019/w98m-zvie
+# https://data.cityofchicago.org/Public-Safety/Crimes-2020/qzdf-xmn8
+
+# loading raw data files
+data2019=fread('Crimes_-_2019.csv', header=T, sep=",")
+data2020=fread('Crimes_-_2020.csv', header=T, sep=",")
+# combine two years of data
+data <- rbind(data2019, data2020)
+
+# parsing date/time 
+data$NewDate <- format(as.Date(data$Date,"%m/%d/%Y %I:%M:%S %p"), "%Y-%m-%d")
+data$Year  <- year(as.Date(data$Date,"%m/%d/%Y"))
+data$Month <- month(as.Date(data$Date,"%m/%d/%Y"))
+data$Month <- factor(data$Month,
+                     levels = c(1,2,3,4,5,6,7,8,9,10,11,12),
+                     labels = c("January","February","March","April","May","June","July","August","September","October","November","December"))
+data$Day   <- mday(as.Date(data$Date,"%m/%d/%Y"))
+data$DayWeek <- wday(as.Date(data$Date,"%m/%d/%Y"))
+data$DayWeek <- factor(data$DayWeek,
+                       levels = c(1,2,3,4,5,6,7),
+                       labels = c("Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"))
+data$Hour  <- as.numeric(hour(strptime(data$Date, format = "%m/%d/%Y %I:%M:%S %p")))
+
+data$FirstDayMonth <- ifelse(data$Day == 1,1,0)
+
+data$Domestic <- ifelse(data$Domestic,1,0)
+data$Domestic <- factor(data$Domestic, levels = c(0,1), labels = c("Non-domestic","Domestic"))
+
+# clean-up non-criminal categories
+data <- data[!(data$'Primary Type' %in% c('NON-CRIMINAL','NON - CRIMINAL','NON-CRIMINAL (SUBJECT SPECIFIED)')),]
+# combine low frequency categories: OTHER NARCOTIC VIOLATION -> NARCOTICS
+data$'Primary Type'[data$'Primary Type'=='OTHER NARCOTIC VIOLATION'] = 'NARCOTICS'  
+# combine low frequency categories: RITUALISM -> OTHER OFFENSE
+data$'Primary Type'[data$'Primary Type'=='RITUALISM'] = 'OTHER OFFENSE'  
+# combine low frequency categories: CRIM SEXUAL ASSAULT -> CRIMINAL SEXUAL ASSAULT
+data$'Primary Type'[data$'Primary Type'=='CRIM SEXUAL ASSAULT'] = 'CRIMINAL SEXUAL ASSAULT'  
+
+# eliminate months of January and February as there was no COVID in 2020 until 1-Mar-2020
+data <- data[as.numeric(data$Month) >= 3,]
+
+# Overall descriptive of the dataset
+# total number of records
+nrow(data)
+table(data$Year)
+table(data$Domestic)
+table(data$'Primary Type')
+
+# Table 1. Crime incidents by type
+
+table1 <- data.frame(cbind(table(data$'Primary Type', data$Year)))
+#table1$Percentage <- percent(table1$Frequency / sum(table1))
+table1$'Daily rate 2019' <- format(round(table1$X2019/(as.numeric(as.Date(max(data$NewDate[data$Year==2019])) - as.Date(min(data$NewDate[data$Year==2019])))),2), nsmall = 2)
+table1$'Daily rate 2020' <- format(round(table1$X2020/(as.numeric(as.Date(max(data$NewDate[data$Year==2020])) - as.Date(min(data$NewDate[data$Year==2020])))),2), nsmall = 2)
+table1[,3:4]
+
+# table 1
+                                  Daily rate 2019 Daily rate 2020
+ARSON                                        1.06            1.78
+ASSAULT                                     58.15           51.19
+BATTERY                                    139.77          115.66
+BURGLARY                                    26.78           24.80
+CONCEALED CARRY LICENSE VIOLATION            0.63            0.41
+CRIMINAL DAMAGE                             75.96           71.46
+CRIMINAL SEXUAL ASSAULT                      4.42            3.01
+CRIMINAL TRESPASS                           18.88           10.17
+DECEPTIVE PRACTICE                          51.30           40.21
+GAMBLING                                     0.45            0.08
+HOMICIDE                                     1.50            2.40
+HUMAN TRAFFICKING                            0.04            0.01
+INTERFERENCE WITH PUBLIC OFFICER             4.40            1.37
+INTIMIDATION                                 0.44            0.49
+KIDNAPPING                                   0.49            0.33
+LIQUOR LAW VIOLATION                         0.66            0.36
+MOTOR VEHICLE THEFT                         24.98           27.93
+NARCOTICS                                   40.82           15.26
+OBSCENITY                                    0.17            0.14
+OFFENSE INVOLVING CHILDREN                   6.37            4.66
+OTHER OFFENSE                               45.61           32.01
+PROSTITUTION                                 1.90            0.76
+PUBLIC INDECENCY                             0.04            0.03
+PUBLIC PEACE VIOLATION                       4.34            3.75
+ROBBERY                                     22.41           21.64
+SEX OFFENSE                                  3.65            2.40
+STALKING                                     0.60            0.54
+THEFT                                      175.39          106.24
+WEAPONS VIOLATION                           18.08           24.47
+#Data
+#Model
+#Results
+#Discussion
+#Graphs
+
+#References
+https://data.cityofchicago.org/Public-Safety/Crimes-2019/w98m-zvie

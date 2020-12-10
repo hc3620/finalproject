@@ -1,0 +1,157 @@
+---
+title: "How did COVID-19 affect the crime rates in Chicago in 2020 compared to 2019"
+author: "HaEun Choi"
+date: 2015-12-09T21:13:14-05:00
+categories: ["R"]
+tags: ["R Markdown", "plot", "regression"]
+---
+
+<link href="/rmarkdown-libs/anchor-sections/anchor-sections.css" rel="stylesheet" />
+<script src="/rmarkdown-libs/anchor-sections/anchor-sections.js"></script>
+
+
+<p>#Abstract
+The purpose of this paper is to identify the differences in crime rates in Chicago between March 2019 and March 2020 using the dataset in Chicago Data Portal.
+It was found that the crime rates have significantly decreased after the COVID pandemic hit North America,
+compared to the previous year.</p>
+<div id="introduction" class="section level1">
+<h1>Introduction</h1>
+<p>I examined the 2019 and 2020 crimes datasets provided by Chicago Police Department which includes the reported crime
+in Chicago. The data is available since 2001 and is constantly being updated. I primarily focused on the crime type
+and the number of reported crimes in order to investigate the difference in numbers and categories of crimes.</p>
+<p>In order to properly categorize the types of crimes, I had to clean some types of crimes from the dataset.
+I also cleaned the categories that has low frequency of crime rate and grouped it into “other offense.”</p>
+<p>The main findings from this study is that some types of crime rate in 2020 has significantly decreased
+compared to the crime rate in 2019. In both years, the two most frequent crime types in 2019 are theft and battery.</p>
+</div>
+<div id="remove-scientific-notation-in-r-output" class="section level1">
+<h1>remove scientific notation in R output</h1>
+<p>options(scipen=999)
+# clear environment
+remove(list = ls())</p>
+</div>
+<div id="install-packages" class="section level1">
+<h1>install packages</h1>
+</div>
+<div id="install.packagesprettyr" class="section level1">
+<h1>install.packages(‘prettyR’)</h1>
+</div>
+<div id="install.packagesggmap" class="section level1">
+<h1>install.packages(‘ggmap’)</h1>
+<p>library(‘data.table’)
+library(‘prettyR’)
+library(‘scales’)
+library(‘plyr’)
+library(‘chron’)
+library(‘ggmap’)
+library(‘dplyr’)</p>
+</div>
+<div id="set-folder-location" class="section level1">
+<h1>set folder location</h1>
+<p>setwd(“C:/ST/julia C/Chicago crime”)</p>
+</div>
+<div id="data-source" class="section level1">
+<h1>Data source</h1>
+</div>
+<div id="httpsdata.cityofchicago.orgpublic-safetycrimes-2019w98m-zvie" class="section level1">
+<h1><a href="https://data.cityofchicago.org/Public-Safety/Crimes-2019/w98m-zvie" class="uri">https://data.cityofchicago.org/Public-Safety/Crimes-2019/w98m-zvie</a></h1>
+</div>
+<div id="httpsdata.cityofchicago.orgpublic-safetycrimes-2020qzdf-xmn8" class="section level1">
+<h1><a href="https://data.cityofchicago.org/Public-Safety/Crimes-2020/qzdf-xmn8" class="uri">https://data.cityofchicago.org/Public-Safety/Crimes-2020/qzdf-xmn8</a></h1>
+</div>
+<div id="loading-raw-data-files" class="section level1">
+<h1>loading raw data files</h1>
+<p>data2019=fread(’Crimes_-<em>2019.csv’, header=T, sep=“,”)
+data2020=fread(’Crimes</em>-_2020.csv’, header=T, sep=“,”)
+# combine two years of data
+data &lt;- rbind(data2019, data2020)</p>
+</div>
+<div id="parsing-datetime" class="section level1">
+<h1>parsing date/time</h1>
+<p>data<span class="math inline">\(NewDate &lt;- format(as.Date(data\)</span>Date,“%m/%d/%Y %I:%M:%S %p”), “%Y-%m-%d”)
+data<span class="math inline">\(Year &lt;- year(as.Date(data\)</span>Date,“%m/%d/%Y”))
+data<span class="math inline">\(Month &lt;- month(as.Date(data\)</span>Date,“%m/%d/%Y”))
+data<span class="math inline">\(Month &lt;- factor(data\)</span>Month,
+levels = c(1,2,3,4,5,6,7,8,9,10,11,12),
+labels = c(“January”,“February”,“March”,“April”,“May”,“June”,“July”,“August”,“September”,“October”,“November”,“December”))
+data<span class="math inline">\(Day &lt;- mday(as.Date(data\)</span>Date,“%m/%d/%Y”))
+data<span class="math inline">\(DayWeek &lt;- wday(as.Date(data\)</span>Date,“%m/%d/%Y”))
+data<span class="math inline">\(DayWeek &lt;- factor(data\)</span>DayWeek,
+levels = c(1,2,3,4,5,6,7),
+labels = c(“Sunday”,“Monday”,“Tuesday”,“Wednesday”,“Thursday”,“Friday”,“Saturday”))
+data<span class="math inline">\(Hour &lt;- as.numeric(hour(strptime(data\)</span>Date, format = “%m/%d/%Y %I:%M:%S %p”)))</p>
+<p>data<span class="math inline">\(FirstDayMonth &lt;- ifelse(data\)</span>Day == 1,1,0)</p>
+<p>data<span class="math inline">\(Domestic &lt;- ifelse(data\)</span>Domestic,1,0)
+data<span class="math inline">\(Domestic &lt;- factor(data\)</span>Domestic, levels = c(0,1), labels = c(“Non-domestic”,“Domestic”))</p>
+</div>
+<div id="clean-up-non-criminal-categories" class="section level1">
+<h1>clean-up non-criminal categories</h1>
+<p>data &lt;- data[!(data$‘Primary Type’ %in% c(‘NON-CRIMINAL’,‘NON - CRIMINAL’,‘NON-CRIMINAL (SUBJECT SPECIFIED)’)),]
+# combine low frequency categories: OTHER NARCOTIC VIOLATION -&gt; NARCOTICS
+data<span class="math inline">\(&#39;Primary Type&#39;[data\)</span>’Primary Type’==‘OTHER NARCOTIC VIOLATION’] = ‘NARCOTICS’<br />
+# combine low frequency categories: RITUALISM -&gt; OTHER OFFENSE
+data<span class="math inline">\(&#39;Primary Type&#39;[data\)</span>’Primary Type’==‘RITUALISM’] = ‘OTHER OFFENSE’<br />
+# combine low frequency categories: CRIM SEXUAL ASSAULT -&gt; CRIMINAL SEXUAL ASSAULT
+data<span class="math inline">\(&#39;Primary Type&#39;[data\)</span>’Primary Type’==‘CRIM SEXUAL ASSAULT’] = ‘CRIMINAL SEXUAL ASSAULT’</p>
+</div>
+<div id="eliminate-months-of-january-and-february-as-there-was-no-covid-in-2020-until-1-mar-2020" class="section level1">
+<h1>eliminate months of January and February as there was no COVID in 2020 until 1-Mar-2020</h1>
+<p>data &lt;- data[as.numeric(data$Month) &gt;= 3,]</p>
+</div>
+<div id="overall-descriptive-of-the-dataset" class="section level1">
+<h1>Overall descriptive of the dataset</h1>
+</div>
+<div id="total-number-of-records" class="section level1">
+<h1>total number of records</h1>
+<p>nrow(data)
+table(data<span class="math inline">\(Year) table(data\)</span>Domestic)
+table(data$‘Primary Type’)</p>
+</div>
+<div id="table-1.-crime-incidents-by-type" class="section level1">
+<h1>Table 1. Crime incidents by type</h1>
+<p>table1 &lt;- data.frame(cbind(table(data<span class="math inline">\(&#39;Primary Type&#39;, data\)</span>Year)))
+#table1<span class="math inline">\(Percentage &lt;- percent(table1\)</span>Frequency / sum(table1))
+table1<span class="math inline">\(&#39;Daily rate 2019&#39; &lt;- format(round(table1\)</span>X2019/(as.numeric(as.Date(max(data<span class="math inline">\(NewDate[data\)</span>Year==2019])) - as.Date(min(data<span class="math inline">\(NewDate[data\)</span>Year==2019])))),2), nsmall = 2)
+table1<span class="math inline">\(&#39;Daily rate 2020&#39; &lt;- format(round(table1\)</span>X2020/(as.numeric(as.Date(max(data<span class="math inline">\(NewDate[data\)</span>Year==2020])) - as.Date(min(data<span class="math inline">\(NewDate[data\)</span>Year==2020])))),2), nsmall = 2)
+table1[,3:4]</p>
+</div>
+<div id="table-1" class="section level1">
+<h1>table 1</h1>
+<pre><code>                              Daily rate 2019 Daily rate 2020</code></pre>
+<p>ARSON 1.06 1.78
+ASSAULT 58.15 51.19
+BATTERY 139.77 115.66
+BURGLARY 26.78 24.80
+CONCEALED CARRY LICENSE VIOLATION 0.63 0.41
+CRIMINAL DAMAGE 75.96 71.46
+CRIMINAL SEXUAL ASSAULT 4.42 3.01
+CRIMINAL TRESPASS 18.88 10.17
+DECEPTIVE PRACTICE 51.30 40.21
+GAMBLING 0.45 0.08
+HOMICIDE 1.50 2.40
+HUMAN TRAFFICKING 0.04 0.01
+INTERFERENCE WITH PUBLIC OFFICER 4.40 1.37
+INTIMIDATION 0.44 0.49
+KIDNAPPING 0.49 0.33
+LIQUOR LAW VIOLATION 0.66 0.36
+MOTOR VEHICLE THEFT 24.98 27.93
+NARCOTICS 40.82 15.26
+OBSCENITY 0.17 0.14
+OFFENSE INVOLVING CHILDREN 6.37 4.66
+OTHER OFFENSE 45.61 32.01
+PROSTITUTION 1.90 0.76
+PUBLIC INDECENCY 0.04 0.03
+PUBLIC PEACE VIOLATION 4.34 3.75
+ROBBERY 22.41 21.64
+SEX OFFENSE 3.65 2.40
+STALKING 0.60 0.54
+THEFT 175.39 106.24
+WEAPONS VIOLATION 18.08 24.47
+#Data
+#Model
+#Results
+#Discussion
+#Graphs</p>
+<p>#References
+<a href="https://data.cityofchicago.org/Public-Safety/Crimes-2019/w98m-zvie" class="uri">https://data.cityofchicago.org/Public-Safety/Crimes-2019/w98m-zvie</a></p>
+</div>
